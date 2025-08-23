@@ -76,7 +76,12 @@ function getAvailableDatasets() {
 function loadDataset(filePath) {
   try {
     console.log('Attempting to load dataset from:', filePath);
-    const fullPath = path.join(__dirname, filePath);
+    
+    // Check if the path is already absolute
+    const fullPath = path.isAbsolute(filePath) 
+      ? filePath 
+      : path.join(__dirname, filePath);
+      
     console.log('Full path:', fullPath);
     
     // Check if file exists
@@ -350,15 +355,15 @@ wss.on('connection', (ws, req) => {
   if (pathSegments[0] === 'select-dataset' && pathSegments.length >= 3) {
     const category = decodeURIComponent(pathSegments[1]);
     const filename = decodeURIComponent(pathSegments[2]);
-    // Use path relative to project root for WebSocket clients
-    const datasetPath = path.join('eeg-score', category, filename);
-    // Use absolute path for file system operations
-    const fullPath = path.join(__dirname, datasetPath);
+    // Create the relative path for logging and client communication
+    const relativePath = path.join('eeg-score', category, filename);
+    // Create the full path for file system operations
+    const fullPath = path.join(__dirname, 'eeg-score', category, filename);
     
-    console.log('Attempting to load dataset from:', datasetPath);
-    console.log('Full path:', fullPath);
+    console.log('Attempting to load dataset from relative path:', relativePath);
+    console.log('Full system path:', fullPath);
     
-    // Load the requested dataset using the full path
+    // Load the requested dataset
     const dataset = loadDataset(fullPath);
     if (dataset) {
       currentDataset = dataset;
