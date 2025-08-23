@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EEG Dataset Player</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f7fa;
+      color: #333;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #2c3e50;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .dataset-category {
+      margin-bottom: 30px;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .category-header {
+      background-color: #f6f8fa;
+      padding: 12px 20px;
+      font-weight: 600;
+      border-bottom: 1px solid #e1e4e8;
+      color: #24292e;
+      text-transform: capitalize;
+    }
+    .dataset-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .dataset-item {
+      padding: 12px 20px;
+      border-bottom: 1px solid #eaecef;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.2s;
+    }
+    .dataset-item:last-child {
+      border-bottom: none;
+    }
+    .dataset-item:hover {
+      background-color: #f6f8fa;
+    }
+    .dataset-name {
+      font-weight: 500;
+    }
+    .dataset-controls {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .dataset-item.playing {
+      background-color: #f0f9ff;
+      border-left: 3px solid #3498db;
+    }
+    
+    .dataset-item.playing .play-btn {
+      display: none;
+    }
+    
+    .dataset-item .stop-btn {
+      display: none;
+    }
+    
+    .dataset-item.playing .stop-btn {
+      display: inline-block;
+    }
+    button {
+      padding: 6px 12px;
+      border: 1px solid #d1d5da;
+      border-radius: 6px;
+      background-color: #fafbfc;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s, border-color 0.2s;
+    }
+    button:hover {
+      background-color: #f3f4f6;
+      border-color: #959da5;
+    }
+    button.primary {
+      background-color: #2ea44f;
+      color: white;
+      border-color: #2a8e47;
+    }
+    button.primary:hover {
+      background-color: #2c974b;
+      border-color: #2a8e47;
+    }
+    button.danger {
+      background-color: #f85149;
+      color: white;
+      border-color: #f85149;
+    }
+    button.danger:hover {
+      background-color: #ea4a40;
+      border-color: #ea4a40;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      display: none;
+    }
+    .status.playing {
+      display: block;
+      background-color: #e6f7ed;
+      border: 1px solid #b3e6cc;
+      color: #0f5132;
+    }
+    .status.stopped {
+      display: block;
+      background-color: #f8f9fa;
+      border: 1px solid #e9ecef;
+      color: #6c757d;
+    }
+    .status.error {
+      display: block;
+      background-color: #f8e7e7;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .progress-container {
+      margin-top: 10px;
+      background-color: #e9ecef;
+      border-radius: 3px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background-color: #28a745;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>EEG Dataset Player</h1>
+    
+    <div id="status" class="status">
+      <div id="statusText">Loading datasets...</div>
+      <div class="progress-container">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+    </div>
+    
+    <div id="datasetsContainer">
+      <!-- Datasets will be loaded here -->
+    </div>
+  </div>
+
+  <script>
+    // DOM elements
+    const datasetsContainer = document.getElementById('datasetsContainer');
+    const statusElement = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+    const progressBar = document.getElementById('progressBar');
+    
+    // State
+    let currentDataset = null;
+    let isPlaying = false;
+    
+    // Initialize the application
+    async function init() {
+      updateStatus('Loading datasets...', 'stopped');
+      
+      try {
+        // Load available datasets
+        const response = await fetch('/api/datasets');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const datasets = await response.json();
+        renderDatasets(datasets);
+        updateStatus('Select a dataset to begin playback', 'stopped');
+      } catch (error) {
+        console.error('Error loading datasets:', error);
+        updateStatus(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Render the datasets in the UI
+    function renderDatasets(datasets) {
+      if (!datasets || !datasets.length) {
+        datasetsContainer.innerHTML = '<p>No datasets available.</p>';
+        return;
+      }
+      
+      let html = '';
+      
+      datasets.forEach(category => {
+        if (!category.files || !category.files.length) return;
+        
+        html += `
+          <div class="dataset-category">
+            <div class="category-header">${category.category.replace(/-/g, ' ')}</div>
+            <ul class="dataset-list">
+        `;
+        
+        category.files.forEach(file => {
+          html += `
+            <li class="dataset-item">
+              <span class="dataset-name">${file.name}</span>
+              <div class="dataset-controls">
+                <button class="primary play-btn" data-path="${file.path}">Play</button>
+                <button class="danger stop-btn">Stop</button>
+              </div>
+            </li>
+          `;
+        });
+        
+        html += `
+            </ul>
+          </div>
+        `;
+      });
+      
+      datasetsContainer.innerHTML = html;
+      
+      // Add event listeners to play/stop buttons
+      document.querySelectorAll('.play-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const filePath = e.target.getAttribute('data-path');
+          startPlayback(filePath);
+        });
+      });
+      
+      document.querySelectorAll('.stop-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+          stopPlayback();
+        });
+      });
+    }
+    
+    // Start playing a dataset
+    async function startPlayback(filePath) {
+      if (isPlaying) {
+        await stopPlayback();
+      }
+      
+      try {
+        updateStatus('Starting playback...', 'playing');
+        
+        // Update UI to show which dataset is playing
+        document.querySelectorAll('.dataset-item').forEach(item => {
+          const btn = item.querySelector('.play-btn');
+          if (btn && btn.getAttribute('data-path') === filePath) {
+            item.classList.add('playing');
+          } else {
+            item.classList.remove('playing');
+          }
+        });
+        
+        const response = await fetch('/api/stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ filePath })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to start playback');
+        }
+        
+        const data = await response.json();
+        currentDataset = data.dataset;
+        isPlaying = true;
+        
+        // Update the UI
+        updateStatus(`Playing: ${currentDataset}`, 'playing');
+        
+        // Connect to WebSocket for real-time updates
+        setupWebSocket(data.dataset, data.dataPoints);
+        
+      } catch (error) {
+        console.error('Error starting playback:', error);
+        updateStatus(`Error: ${error.message}`, 'error');
+        isPlaying = false;
+      }
+    }
+    
+    // Stop the current playback
+    async function stopPlayback() {
+      if (!isPlaying) return;
+      
+      try {
+        // Update UI to remove playing state
+        document.querySelectorAll('.dataset-item').forEach(item => {
+          item.classList.remove('playing');
+        });
+        const response = await fetch('/api/stop', {
+          method: 'POST'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to stop playback');
+        }
+        
+        isPlaying = false;
+        currentDataset = null;
+        updateStatus('Playback stopped', 'stopped');
+        
+        // Close WebSocket if open
+        if (window.ws) {
+          window.ws.close();
+          window.ws = null;
+        }
+        
+      } catch (error) {
+        console.error('Error stopping playback:', error);
+        updateStatus(`Error: ${error.message}`, 'error');
+      }
+    }
+    
+    // Set up WebSocket connection for real-time updates
+    function setupWebSocket(datasetName, totalDataPoints) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      
+      if (window.ws) {
+        window.ws.close();
+      }
+      
+      window.ws = new WebSocket(wsUrl);
+      
+      window.ws.onopen = () => {
+        console.log('WebSocket connected');
+      };
+      
+      window.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'eeg') {
+            // Update progress
+            const progress = ((data.index + 1) / data.total) * 100;
+            progressBar.style.width = `${progress}%`;
+            
+            // Update status text with current value
+            statusText.textContent = `Playing: ${datasetName} (${data.index + 1}/${data.total}) - Value: ${data.value.toFixed(4)}`;
+          }
+          
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+      
+      window.ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        if (isPlaying) {
+          updateStatus('Connection lost', 'error');
+          isPlaying = false;
+        }
+      };
+      
+      window.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        updateStatus('Connection error', 'error');
+        isPlaying = false;
+      };
+    }
+    
+    // Update the status display
+    function updateStatus(message, type = 'stopped') {
+      statusText.textContent = message;
+      
+      // Update status class
+      statusElement.className = 'status';
+      statusElement.classList.add(type);
+      
+      // Reset progress bar if stopped or error
+      if (type !== 'playing') {
+        progressBar.style.width = '0%';
+      }
+    }
+    
+    // Initialize the app when the page loads
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
