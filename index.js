@@ -375,7 +375,7 @@ wss.on('connection', (ws, req) => {
         startStreaming();
       }
     } else {
-      console.error(`Failed to load dataset from URL: ${datasetPath}`);
+      console.error(`Failed to load dataset from path: ${relativePath}`);
       ws.send(JSON.stringify({
         type: 'error',
         message: `Failed to load dataset: ${category}/${filename}`,
@@ -385,17 +385,32 @@ wss.on('connection', (ws, req) => {
     }
   }
   
-  // Send current status to newly connected client
-  ws.send(JSON.stringify({
-    type: 'status',
-    isStreaming,
-    currentDataset: currentDataset ? {
-      name: path.basename(currentDatasetPath, '.json').replace('_', ' '),
-      length: currentDataset.length,
-      path: currentDatasetPath
-    } : null,
-    timestamp: Date.now()
-  }));
+  // Send immediate connection confirmation
+  const sendStatus = () => {
+    ws.send(JSON.stringify({
+      type: 'connection_established',
+      message: 'WebSocket connection established',
+      isStreaming,
+      currentDataset: currentDataset ? {
+        name: path.basename(currentDatasetPath, '.json').replace('_', ' '),
+        length: currentDataset.length,
+        path: currentDatasetPath
+      } : null,
+      timestamp: Date.now()
+    }));
+  };
+  
+  // Send initial status
+  sendStatus();
+  
+  // Send status updates every 5 seconds to keep connection alive
+  const statusInterval = setInterval(sendStatus, 5000);
+  
+  // Clean up on connection close
+  ws.on('close', () => {
+    clearInterval(statusInterval);
+    console.log('WebSocket client disconnected');
+  });
   
   // Handle incoming messages from clients (if needed)
   ws.on('message', (message) => {
