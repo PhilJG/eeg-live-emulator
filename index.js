@@ -300,8 +300,43 @@ app.post('/api/stop', (req, res) => {
 app.use(express.static(path.join(__dirname, "public")));
 
 // WebSocket server connection handler
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   console.log('New WebSocket client connected');
+  
+  // Parse URL to check for dataset selection
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const pathSegments = url.pathname.split('/').filter(segment => segment);
+  
+  // Check if the URL follows the pattern /select-dataset/category/filename
+  if (pathSegments[0] === 'select-dataset' && pathSegments.length >= 3) {
+    const category = decodeURIComponent(pathSegments[1]);
+    const filename = decodeURIComponent(pathSegments[2]);
+    const datasetPath = path.join('eeg-score', category, filename);
+    
+    console.log('Attempting to load dataset from:', datasetPath);
+    console.log('Full path:', path.resolve(datasetPath));
+    
+    // Load the requested dataset
+    const dataset = loadDataset(datasetPath);
+    if (dataset) {
+      currentDataset = dataset;
+      currentDatasetPath = datasetPath;
+      console.log(`Loaded dataset from URL: ${datasetPath}`);
+      
+      // Start streaming automatically
+      if (!isStreaming) {
+        startStreaming();
+      }
+    } else {
+      console.error(`Failed to load dataset from URL: ${datasetPath}`);
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: `Failed to load dataset: ${category}/${filename}`,
+        timestamp: Date.now()
+      }));
+      return;
+    }
+  }
   
   // Send current status to newly connected client
   ws.send(JSON.stringify({
@@ -309,7 +344,8 @@ wss.on('connection', (ws) => {
     isStreaming,
     currentDataset: currentDataset ? {
       name: path.basename(currentDatasetPath, '.json').replace('_', ' '),
-      length: currentDataset.length
+      length: currentDataset.length,
+      path: currentDatasetPath
     } : null,
     timestamp: Date.now()
   }));
