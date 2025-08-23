@@ -367,8 +367,8 @@ wss.on('connection', (ws, req) => {
     const dataset = loadDataset(fullPath);
     if (dataset) {
       currentDataset = dataset;
-      currentDatasetPath = datasetPath;
-      console.log(`Loaded dataset from URL: ${datasetPath}`);
+      currentDatasetPath = relativePath;  // Use relativePath instead of datasetPath
+      console.log(`Loaded dataset from path: ${relativePath}`);
       
       // Start streaming automatically
       if (!isStreaming) {
