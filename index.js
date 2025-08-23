@@ -118,6 +118,45 @@ function loadDataset(filePath) {
   }
 }
 
+// Test endpoint to check file accessibility in deployment
+app.get('/api/test-files', (req, res) => {
+  const testFiles = [
+    'eeg-score/alpha-creative-state/green-salamander-calm.json',
+    'eeg-score/alpha-resting-state/green-gorilla-calm.json',
+    'eeg-score/eyes-closed/ghostwhite-penguin-calm.json'
+  ];
+  
+  const results = testFiles.map(file => {
+    const fullPath = path.join(__dirname, file);
+    const exists = fs.existsSync(fullPath);
+    let size = null;
+    let error = null;
+    
+    if (exists) {
+      try {
+        const stats = fs.statSync(fullPath);
+        size = stats.size;
+      } catch (err) {
+        error = err.message;
+      }
+    }
+    
+    return {
+      file,
+      exists,
+      size,
+      error,
+      fullPath
+    };
+  });
+  
+  res.json({
+    cwd: process.cwd(),
+    __dirname: __dirname,
+    files: results
+  });
+});
+
 // API route to list all available datasets
 app.get('/api/datasets', (req, res) => {
   try {
