@@ -350,13 +350,16 @@ wss.on('connection', (ws, req) => {
   if (pathSegments[0] === 'select-dataset' && pathSegments.length >= 3) {
     const category = decodeURIComponent(pathSegments[1]);
     const filename = decodeURIComponent(pathSegments[2]);
+    // Use path relative to project root for WebSocket clients
     const datasetPath = path.join('eeg-score', category, filename);
+    // Use absolute path for file system operations
+    const fullPath = path.join(__dirname, datasetPath);
     
     console.log('Attempting to load dataset from:', datasetPath);
-    console.log('Full path:', path.resolve(datasetPath));
+    console.log('Full path:', fullPath);
     
-    // Load the requested dataset
-    const dataset = loadDataset(datasetPath);
+    // Load the requested dataset using the full path
+    const dataset = loadDataset(fullPath);
     if (dataset) {
       currentDataset = dataset;
       currentDatasetPath = datasetPath;
